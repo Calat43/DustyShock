@@ -1,0 +1,5 @@
+*.dat
+cmake-build-debug
+*.png
+.idea
+
