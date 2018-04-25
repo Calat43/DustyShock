@@ -7,6 +7,6 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#include "common_use.h"
+#include "common_use.hpp"
 
 void gas_shock(ParticleParams gasParams, ProblemParams problemParams);
