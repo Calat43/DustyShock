@@ -39,6 +39,7 @@ typedef struct _problemParams{
     double tau;
     double t_stop;
     double K;
+    double d2g;
 
     double gamma;
     double membrane;

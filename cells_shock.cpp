@@ -166,7 +166,7 @@ static double found_next_x(double prev_x, double a_p_astr, double t_stop_astr, d
     }
     else
     {
-        denom = 1 + (eps_astr - 1) * params.tau / t_stop_astr;
+        denom = 1 + (eps_astr + 1) * params.tau / t_stop_astr;
     }
 
     return (params.tau * a_p_astr + prev_x) / denom;
@@ -182,9 +182,18 @@ double found_next_gvel_astr(double x, double y, double eps_astr)
     return (y + eps_astr * x) / (1 + eps_astr);
 }
 
-double found_next_dvel_astr(double x, double y, double eps_astr)
+double found_next_dvel_astr(double x, double y, double eps_astr, int is_drag, double prev_dvel_astr)
 {
-    return (y - x) / (1 + eps_astr);
+    double result;
+    if(is_drag == 0)
+    {
+        result = prev_dvel_astr;
+    }
+    else
+    {
+        result = (y - x) / (1 + eps_astr);
+    }
+    return result;
 }
 
 double next_gvelocity(double eps_astr, double t_stop_astr, double next_dvel_astr, double grho_a,
@@ -211,13 +220,14 @@ double next_gvelocity(double eps_astr, double t_stop_astr, double next_dvel_astr
     return result;
 }
 
-double next_dvelocity(double prev_dvel, double t_stop_astr, double next_gvel_astr, ProblemParams params)
+double next_dvelocity(double prev_dvel, double t_stop_astr, double next_gvel_astr, double is_drag,
+                      ProblemParams params)
 {
     double result = 0;
     double denom = 0;
     double tau = params.tau;
 
-    if(t_stop_astr == 0 || next_gvel_astr == 0)
+    if(is_drag == 0)
     {
         result = prev_dvel;
     }
@@ -229,7 +239,7 @@ double next_dvelocity(double prev_dvel, double t_stop_astr, double next_gvel_ast
 
     return result;
 }
-
+/*
 static double found_momentum(double gmass, double dmass, std::vector<double> & gvel, std::vector<double> & dvel,
                              uint re_gamount, uint re_damount)
 {
@@ -260,6 +270,8 @@ static double found_gvel_drag(std::vector<double> & epsilon_astr, std::vector<do
 	}
 	return result * params.K;
 }
+ */
+/*
 
 static double found_dvel_drag(std::vector<double> & t_stop_astr, std::vector<double> & dvel,
                               std::vector<double> & gvel_astr, std::vector<int> & dust_cells_num, uint re_damount,
@@ -305,6 +317,7 @@ static double found_dvel_cell_drag(int cell_num, std::vector<double> & t_stop_as
     }
     return result * params.K;
 }
+*/
 
 void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams dustParams, ProblemParams problemParams)
 {
@@ -351,6 +364,9 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
     std::vector<double> image_prev_pressure(all_gamount);
     std::vector<double> image_next_pressure(all_gamount);
 
+    std::vector<double> check_gvel(re_gamount);
+    std::vector<double> check_image_gvel(all_gamount);
+
     fill_initial_gas_massives(prev_grho, prev_gvel, prev_energy, prev_pressure, image_prev_grho, image_prev_gvel,
                               image_prev_energy, image_prev_pressure, gas_real_left_p_num, gas_real_right_p_num,
                               gas_image_left_p_num, gas_image_right_p_num, gasParams);
@@ -386,6 +402,7 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
         image_next_energy.at(j) = image_prev_energy.at(j);
         image_next_pressure.at(j) = image_prev_pressure.at(j);
     }
+
     //Блок для газа. END
 
     //Блок для пыли. BEGIN
@@ -422,6 +439,9 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
     std::vector<double> image_next_drho(all_damount);
     std::vector<double> image_prev_dvel(all_damount);
     std::vector<double> image_next_dvel(all_damount);
+
+    std::vector<double> check_dvel(re_damount);
+    std::vector<double> check_image_dvel(all_damount);
 
     fill_initial_dust_massives(prev_drho, prev_dvel, image_prev_drho, image_prev_dvel,
                                dust_real_left_p_num, dust_real_right_p_num,
@@ -492,6 +512,8 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
     std::vector<double> prev_y(cell_amount);
     std::vector<double> next_y(cell_amount);
 
+    std::vector<int> is_drag(cell_amount);
+
     for(uint k = 0; k < cell_amount; ++k)
     {
         prev_gvel_astr.at(k) = NAN;
@@ -505,15 +527,15 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
         next_y.at(k) = NAN;
     }
 
-    double gasDrag = 0;
-    double dustDrag = 0;
-    double momentum = 0;
+    //double gasDrag = 0;
+    //double dustDrag = 0;
+    //double momentum = 0;
 
     char filename[512];
 
-    sprintf(filename, "%s/im_cellsShock_gas_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR,
+    sprintf(filename, "%s/im_cellsShock_gas_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg_d2g%lg.dat", DATA_DIR,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, gasParams.particles_amount,
-            problemParams.nu_coef, problemParams.K);
+            problemParams.nu_coef, problemParams.K, problemParams.d2g);
     FILE * gas0_out = fopen(filename, "w");
     for (uint i = 0; i < all_gamount; i++) {
         fprintf(gas0_out, "%lf %lf %lf %lf %lf\n", image_prev_gcoord.at(i), image_prev_grho.at(i), image_prev_gvel.at(i),
@@ -521,17 +543,19 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
     }
     fclose(gas0_out);
 
-    sprintf(filename, "%s/im_cellsShock_dust_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR,
+    sprintf(filename, "%s/im_cellsShock_dust_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg_d2g%lg.dat", DATA_DIR,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, dustParams.particles_amount,
-            problemParams.nu_coef, problemParams.K);
+            problemParams.nu_coef, problemParams.K, problemParams.d2g);
     FILE * dust0_out = fopen(filename, "w");
     for (uint i = 0; i < all_gamount; i++) {
         fprintf(dust0_out, "%lf %lf %lf\n", image_prev_dcoord.at(i), image_prev_drho.at(i), image_prev_dvel.at(i));
     }
     fclose(dust0_out);
 
-    //sprintf(filename, "%s/cell_momentum_tau%lg_K%lg.dat", DATA_DIR, problemParams.tau, problemParams.K);
-    //FILE * moment = fopen(filename, "w");
+    sprintf(filename, "%s/gcells_tau%lg_K%lg.dat", DATA_DIR, problemParams.tau, problemParams.K);
+    FILE * gcells = fopen(filename, "w");
+    sprintf(filename, "%s/dcells_tau%lg_K%lg.dat", DATA_DIR, problemParams.tau, problemParams.K);
+    FILE * dcells = fopen(filename, "w");
 
     /*
     for(int i = 0; i < re_gamount; ++i)
@@ -547,7 +571,7 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
         dust_cells_num.at(i) = i;
         dust_cells.at(i).at(1) = i;
     }
-     */
+    */
 
     for(int frameId = 0; frameId < floor(problemParams.T / problemParams.tau); ++frameId)
     {
@@ -559,13 +583,17 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
         fill_cells_num(dust_cells_num, prev_dcoord, cell_length, cell_amount, dustParams, problemParams);
         fill_cells(dust_cells, dust_cells_num, cell_amount, dustParams);
 
-        /*
-        for(int k = 0; k < cell_amount; ++k)
+        for(uint k = 0; k < cell_amount; ++k)
         {
-            assert(gas_cells.at(k).at(0) != 0);
-            assert(dust_cells.at(k).at(0) != 0);
+            if (gas_cells[k][0] == 0 || dust_cells[k][0] == 0)
+            {
+                is_drag[k] = 0;
+            }
+            else
+            {
+                is_drag[k] = 1;
+            }
         }
-         */
 
         for(uint k = 0; k < cell_amount; ++k)
         {
@@ -600,7 +628,8 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
 
         for(uint k = 0; k < cell_amount; ++k)
         {
-            next_dvel_astr.at(k) = found_next_dvel_astr(next_x.at(k), next_y.at(k), eps_astr.at(k));
+            next_dvel_astr.at(k) = found_next_dvel_astr(next_x.at(k), next_y.at(k), eps_astr.at(k), is_drag.at(k),
+                                                        prev_dvel_astr.at(k));
             next_gvel_astr.at(k) = found_next_gvel_astr(next_x.at(k), next_y.at(k), eps_astr.at(k));
         }
 
@@ -608,16 +637,17 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
         {
             cell_num = gas_cells_num.at(i);
             next_gvel.at(i) = next_gvelocity(eps_astr.at(cell_num), t_stop_astr.at(cell_num), next_dvel_astr.at(cell_num),
-                                          prev_grho.at(i), prev_gcoord.at(i), prev_pressure.at(i), prev_gvel.at(i), all_gamount,
-                                          gmass, image_prev_grho, image_prev_gcoord, image_prev_pressure,
-                                          image_prev_gvel, problemParams);
+                                             prev_grho.at(i), prev_gcoord.at(i), prev_pressure.at(i), prev_gvel.at(i), all_gamount,
+                                             gmass, image_prev_grho, image_prev_gcoord, image_prev_pressure,
+                                             image_prev_gvel, problemParams);
             assert(!isnan(next_gvel.at(i)));
         }
 
         for(uint i = 0; i < re_damount; ++i)
         {
             cell_num = dust_cells_num.at(i);
-            next_dvel.at(i) = next_dvelocity(prev_dvel.at(i), t_stop_astr.at(cell_num), next_gvel_astr.at(cell_num), problemParams);
+            next_dvel.at(i) = next_dvelocity(prev_dvel.at(i), t_stop_astr.at(cell_num), next_gvel_astr.at(cell_num),
+                                             is_drag.at(cell_num), problemParams);
             assert(!isnan(next_dvel.at(i)));
         }
 
@@ -646,6 +676,7 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
             assert(!isnan(image_next_gvel.at(j)));
             assert(!isnan(image_next_energy.at(j)));
         }
+
         for(uint j = dust_image_left_p_num; j < dust_image_left_p_num + re_damount; ++j)
         {
             image_next_dcoord.at(j) = next_dcoord.at(j - dust_image_left_p_num);
@@ -738,7 +769,8 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
             image_prev_drho.at(j) = image_next_drho.at(j);
         }
 
-        if(frameId == 100 || frameId == 200 || frameId == 250 || frameId == 300)
+        /*
+        if(frameId == 250 || frameId == 300)
         {
             sprintf(filename, "%s/im_cellsShock_gas_%dframeId_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR,
                     frameId, problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta,
@@ -758,12 +790,20 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
                 fprintf(dust1_out, "%lf %lf %lf\n", image_prev_dcoord.at(i), image_prev_drho.at(i), image_prev_dvel.at(i));
             }
             fclose(dust1_out);
+
+            for(uint i = 0; i < cell_amount; ++i)
+            {
+                fprintf(dcells, "%d ", is_drag.at(i));
+            }
         }
+        */
+
     }
 
-    sprintf(filename, "%s/im_cellsShock_gas_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR, problemParams.T,
+    sprintf(filename, "%s/im_cellsShock_gas_cell%lg_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg_d2g%lg.dat",
+            DATA_DIR, cell_length, problemParams.T,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, gasParams.particles_amount,
-            problemParams.nu_coef, problemParams.K);
+            problemParams.nu_coef, problemParams.K, problemParams.d2g);
     FILE * gas_out = fopen(filename, "w");
     for (uint i = 0; i < all_gamount; i++) {
         fprintf(gas_out, "%lf %lf %lf %lf %lf\n", image_prev_gcoord.at(i), image_prev_grho.at(i), image_prev_gvel.at(i),
@@ -771,9 +811,10 @@ void cells_shock(double cell_length, ParticleParams gasParams, ParticleParams du
     }
     fclose(gas_out);
 
-    sprintf(filename, "%s/im_cellsShock_dust_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR, problemParams.T,
+    sprintf(filename, "%s/im_cellsShock_dust_cell%lg_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg_d2g%lg.dat",
+            DATA_DIR, cell_length, problemParams.T,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, dustParams.particles_amount,
-            problemParams.nu_coef, problemParams.K);
+            problemParams.nu_coef, problemParams.K, problemParams.d2g);
     FILE * dust_out = fopen(filename, "w");
     for (uint i = 0; i < all_gamount; i++) {
         fprintf(dust_out, "%lf %lf %lf\n", image_prev_dcoord.at(i), image_prev_drho.at(i), image_prev_dvel.at(i));

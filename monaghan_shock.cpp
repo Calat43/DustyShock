@@ -1,92 +1,70 @@
+#include "monaghan_shock.h"
+
 #include "explicit_shock.hpp"
 
-static double found_next_gas_vel(double prev_gvel, double prev_grho, double prev_gpress, double prev_gcoord,
-                                 double gmass, std::vector<double> & image_prev_gvel,
-                                 std::vector<double> & image_prev_grho, std::vector<double> & image_prev_gpress,
-                                 std::vector<double> & image_prev_gcoord, int image_amount, double prev_dvel_in_gas,
-                                 double epsilon, ProblemParams params)
+static double found_next_gas_vel(double prev_gvel, double prev_grho, double prev_gpress, double prev_gcoord, double gmass,
+                                 double dmass, std::vector<double> & image_prev_gpress, std::vector<double> & image_prev_grho,
+                                 std::vector<double> & image_prev_gcoord, std::vector<double> & image_prev_gvel,
+                                 std::vector<double> & image_prev_drho, std::vector<double> & image_prev_dvel,
+                                 std::vector<double> & image_prev_dcoord, int image_gamount, int image_damount,
+                                 ProblemParams params)
+
+
+{
+    double a_p = 0;
+    double drag = 0;
+    double result = 0;
+    double r_ja = 0;
+
+    for(uint j = 0; j < image_gamount; ++j)
+    {
+        if (fabs(prev_gcoord - image_prev_gcoord.at(j)) <= 2. * params.h)
+        {
+            a_p += (prev_gpress / pow(prev_grho, 2) + image_prev_gpress.at(j) / pow(image_prev_grho.at(j), 2) +
+                    found_viscosity(prev_gpress, image_prev_gpress.at(j), prev_gvel, image_prev_gvel.at(j),
+                                    prev_grho, image_prev_grho.at(j), prev_gcoord, image_prev_gcoord.at(j), params))
+                   * spline_gradient(prev_gcoord, image_prev_gcoord.at(j), params);
+        }
+    }
+    a_p *= gmass;
+
+    for(uint j = 0; j < image_damount; ++j)
+    {
+        if (fabs(prev_gcoord - image_prev_dcoord.at(j)) <= 2. * params.h)
+        {
+            r_ja = image_prev_dcoord.at(j) - prev_gcoord;
+            drag += (prev_gvel - image_prev_dvel.at(j)) * r_ja / (pow(r_ja, 2) + 0.001 * params.h * params.h) /
+                    prev_grho /
+                    image_prev_drho.at(j) * r_ja * spline_kernel(prev_gcoord, image_prev_dcoord.at(j), params);
+        }
+    }
+    drag = drag * dmass * params.K;
+
+    result = - params.tau * a_p - params.tau * drag + prev_gvel;
+
+    return result;
+}
+
+static double found_next_dust_vel(double prev_dvel, double prev_drho, double prev_dcoord, double gmass,
+                                  std::vector<double> & image_prev_gvel, std::vector<double> & image_prev_grho,
+                                  std::vector<double> & image_prev_gcoord, int image_gamount, ProblemParams params)
 {
     double result = 0;
-    for(int j = 0; j < image_amount; ++j)
+    double r_ja = 0;
+    for(uint j = 0; j < image_gamount; ++j)
     {
-        if (fabs(prev_gcoord - image_prev_gcoord.at(j)) < 2.1 * params.h)
+        if (fabs(prev_dcoord - image_prev_gcoord.at(j)) <= 2. * params.h)
         {
-            result += (image_prev_gpress.at(j) / pow(image_prev_grho.at(j), 2) + prev_gpress/ pow(prev_grho, 2) +
-                       found_viscosity(prev_gpress, image_prev_gpress.at(j), prev_gvel, image_prev_gvel.at(j),
-                                       prev_grho, image_prev_grho.at(j), prev_gcoord, image_prev_gcoord.at(j), params))
-                      * spline_gradient(prev_gcoord, image_prev_gcoord.at(j), params);
+            r_ja = prev_dcoord - image_prev_gcoord.at(j);
+            result += (image_prev_gvel.at(j) - prev_dvel) * r_ja / (pow(r_ja, 2) + 0.001 * params.h * params.h) /
+                    prev_drho / image_prev_grho.at(j)  * r_ja * spline_kernel(prev_dcoord, image_prev_gcoord.at(j), params);
         }
     }
 
-    return - params.tau * gmass * result - params.tau * params.K * (prev_gvel - prev_dvel_in_gas) / prev_grho +
-            prev_gvel;
+    return params.tau * gmass * params.K * result + prev_dvel;
 }
 
-static double found_next_dust_vel(double prev_dvel, double prev_drho, double prev_gvel_in_dust, ProblemParams params)
-{
-    return params.tau * params.K * (prev_gvel_in_dust - prev_dvel) / prev_drho + prev_dvel;
-}
-
-double near_velocity(double r, std::vector<double> & coordinate, std::vector<double> & velocity, int amount)
-{
-    int nearly = 0;
-
-    for (int i = 0; i < amount; ++i)
-    {
-        double new_fabs = fabs(r - coordinate.at(i));
-        double old_fabs = fabs(r - coordinate.at(nearly));
-        if (new_fabs < old_fabs)
-        {
-            nearly = i;
-        }
-    }
-
-    return velocity.at(nearly);
-}
-/*
-static double found_momentum(double gmass, double dmass, std::vector<double> & gvel, std::vector<double> & dvel,
-                             int re_gamount, int re_damount)
-{
-    double gasResult = 0;
-    double dustResult = 0;
-    for(int i = 0; i < re_gamount; ++i)
-    {
-        gasResult += gvel.at(i);
-    }
-    for(int i = 0; i < re_damount; ++i)
-    {
-        dustResult += dvel.at(i);
-    }
-
-    return gmass * gasResult + dmass * dustResult;
-}
-
-static double found_gvel_drag(std::vector<double> & grho, std::vector<double> & gvel, std::vector<double> & dvel_in_gas,
-                              double K, int re_gamount)
-{
-    double result = 0;
-
-    for(int i = 0; i < re_gamount; ++i)
-    {
-        result += (gvel.at(i) - dvel_in_gas.at(i)) / grho.at(i);
-    }
-    return result * K;
-}
-
-static double found_dvel_drag(std::vector<double> & drho, std::vector<double> & dvel, std::vector<double> & gvel_in_dust,
-                              double K, int re_damount)
-{
-    double result = 0;
-
-    for(int i = 0; i < re_damount; ++i)
-    {
-        result += (dvel.at(i) - gvel_in_dust.at(i)) / drho.at(i);
-    }
-    return result * K;
-}
-*/
-
-void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, ProblemParams problemParams)
+void monaghan_shock(ParticleParams gasParams, ParticleParams dustParams, ProblemParams problemParams)
 {
     //Блок для газа. BEGIN
     uint re_gamount = gasParams.particles_amount;
@@ -229,22 +207,10 @@ void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, Problem
     //Блок для пыли. END
 
     //а теперь смотрим, когда количество частиц газа = количеству частиц пыли
-    std::vector<double> epsilon(re_gamount);
-    std::vector<double> prev_gvel_in_dust(re_damount);
-    std::vector<double> prev_dvel_in_gas(re_gamount);
-
-    //double gasDrag = 0;
-    //double dustDrag = 0;
-    //double momentum = 0;
-
-    for(uint i = 0; i < re_gamount; ++i)
-    {
-        epsilon.at(i) = found_epsilon(prev_dcoord.at(i), prev_dcoord, dmass, prev_grho.at(i), re_damount, problemParams);
-    }
 
     char filename[512];
 
-    sprintf(filename, "%s/im_explShock_gas_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR,
+    sprintf(filename, "%s/im_monaghanShock_gas_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, gasParams.particles_amount,
             problemParams.nu_coef, problemParams.K);
     FILE * gas0_out = fopen(filename, "w");
@@ -254,7 +220,7 @@ void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, Problem
     }
     fclose(gas0_out);
 
-    sprintf(filename, "%s/im_explShock_dust_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR,
+    sprintf(filename, "%s/im_monaghanShock_dust_T0_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, dustParams.particles_amount,
             problemParams.nu_coef, problemParams.K);
     FILE * dust0_out = fopen(filename, "w");
@@ -263,35 +229,20 @@ void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, Problem
     }
     fclose(dust0_out);
 
-    //sprintf(filename, "%s/near_momentum_tau%lg.dat", DATA_DIR, problemParams.tau);
-    //FILE * moment = fopen(filename, "w");
-
     for(int frameId = 0; frameId < floor(problemParams.T / problemParams.tau); ++frameId)
     {
         printf("%d\n", frameId);
 
-        for(uint i = 0; i < re_damount; ++i)
-        {
-            prev_gvel_in_dust.at(i) = //near_velocity(prev_dcoord.at(i), image_prev_gcoord, image_prev_gvel, all_gamount);
-                    interpolation_value(prev_dcoord.at(i), gmass, image_prev_gvel, image_prev_grho,
-                    image_prev_gcoord, all_gamount, problemParams);
-        }
-        for(uint i = 0; i < re_gamount; ++i)
-        {
-            prev_dvel_in_gas.at(i) = //near_velocity(prev_gcoord.at(i), image_prev_dcoord, image_prev_dvel, all_damount);
-                    interpolation_value(prev_gcoord.at(i), dmass, image_prev_dvel, image_prev_drho,
-                    image_prev_dcoord, all_damount, problemParams);
-        }
-
         for(uint i = 0; i < re_gamount; ++i)
         {
             next_gcoord.at(i) = found_next_coordinate(prev_gcoord.at(i), prev_gvel.at(i), problemParams);
-            next_gvel.at(i) = found_next_gas_vel(prev_gvel.at(i), prev_grho.at(i), prev_pressure.at(i), prev_gcoord.at(i), gmass,
-                                              image_prev_gvel, image_prev_grho, image_prev_pressure, image_prev_gcoord,
-                                              all_gamount, prev_dvel_in_gas.at(i), epsilon.at(i), problemParams);
+            next_gvel.at(i) = found_next_gas_vel(prev_gvel.at(i), prev_grho.at(i), prev_pressure.at(i), prev_gcoord.at(i),
+                                                 gmass, dmass, image_prev_pressure, image_prev_grho, image_prev_gcoord,
+                                                 image_prev_gvel, image_prev_drho, image_prev_dvel, image_prev_dcoord,
+                                                 all_gamount, all_damount, problemParams);
             next_energy.at(i) = found_next_energy(prev_energy.at(i), gmass, prev_gvel.at(i), prev_pressure.at(i),
-                                               image_prev_pressure, prev_grho.at(i), image_prev_grho, all_gamount,
-                                               image_prev_gvel, prev_gcoord.at(i), image_prev_gcoord, problemParams);
+                                                  image_prev_pressure, prev_grho.at(i), image_prev_grho, all_gamount,
+                                                  image_prev_gvel, prev_gcoord.at(i), image_prev_gcoord, problemParams);
             assert(!isnan(next_gcoord.at(i)));
             assert(!isnan(next_gvel.at(i)));
             assert(!isnan(next_energy.at(i)));
@@ -299,7 +250,9 @@ void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, Problem
         for(uint i = 0; i < re_damount; ++i)
         {
             next_dcoord.at(i) = found_next_coordinate(prev_dcoord.at(i), prev_dvel.at(i), problemParams);
-            next_dvel.at(i) = found_next_dust_vel(prev_dvel.at(i), prev_drho.at(i), prev_gvel_in_dust.at(i), problemParams);
+            next_dvel.at(i) = found_next_dust_vel(prev_dvel.at(i), prev_drho.at(i), prev_dcoord.at(i), gmass,
+                                                  image_prev_gvel, image_prev_grho, image_prev_gcoord, all_gamount,
+                                                  problemParams);
             assert(!isnan(next_dcoord.at(i)));
             assert(!isnan(next_dvel.at(i)));
         }
@@ -395,7 +348,7 @@ void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, Problem
 
     }
 
-    sprintf(filename, "%s/im_explShock_gas_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR, problemParams.T,
+    sprintf(filename, "%s/im_monaghanShock_gas_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR, problemParams.T,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, gasParams.particles_amount,
             problemParams.nu_coef, problemParams.K);
     FILE * gas_out = fopen(filename, "w");
@@ -405,7 +358,7 @@ void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, Problem
     }
     fclose(gas_out);
 
-    sprintf(filename, "%s/im_explShock_dust_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR, problemParams.T,
+    sprintf(filename, "%s/im_monaghanShock_dust_T%lg_h%lg_tau%lg_alfa%lg_beta%lg_N%d_nu%lg_K%lg.dat", DATA_DIR, problemParams.T,
             problemParams.h, problemParams.tau, problemParams.alfa, problemParams.beta, dustParams.particles_amount,
             problemParams.nu_coef, problemParams.K);
     FILE * dust_out = fopen(filename, "w");
@@ -414,5 +367,5 @@ void explicit_shock(ParticleParams gasParams, ParticleParams dustParams, Problem
     }
     fclose(dust_out);
 
-    //fclose(moment);
 }
+

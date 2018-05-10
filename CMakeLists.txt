@@ -14,6 +14,8 @@ set(SOURCE_FILES
         explicit_shock.cpp
         explicit_shock.hpp
         cells_shock.cpp
-        cells_shock.hpp)
+        cells_shock.hpp
+        monaghan_shock.cpp
+        monaghan_shock.h)
 add_executable(DustyShock ${SOURCE_FILES})
 target_link_libraries(DustyShock m)

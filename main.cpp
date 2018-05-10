@@ -7,41 +7,18 @@
 #include "gas_shock.hpp"
 #include "explicit_shock.hpp"
 #include "cells_shock.hpp"
+#include "monaghan_shock.h"
 #include <vector>
 
 int main()
 {
-    ParticleParams gasParams;
-    gasParams.particles_amount = 2250;  // should be devidable by (L2R + 1)
-    gasParams.im_particles_amount = 450;  // should be devidable by (L2R + 1)
-    gasParams.isGas = true;
-
-    gasParams.rho_left = 1;
-    gasParams.press_left = 1;
-    gasParams.vel_left = 0;
-    gasParams.energy_left = 2.5;
-
-    gasParams.rho_right = 0.125;
-    gasParams.press_right = 0.1;
-    gasParams.vel_right = 0;
-    gasParams.energy_right = 2;
-
-    ParticleParams dustParams;
-    dustParams.particles_amount = 2250;
-    dustParams.im_particles_amount = 450;
-    dustParams.isGas = false;
-
-    dustParams.rho_left = 1;
-    dustParams.vel_left = 0;
-    dustParams.rho_right = 0.125;
-    dustParams.vel_right = 0;
-
     ProblemParams problemParams;
     problemParams.T = 0.2;
     problemParams.h = 0.01;
-    problemParams.tau = 0.0001;
+    problemParams.tau = 0.001;
     //problemParams.t_stop = 0.002;
     problemParams.K = 50000;
+    problemParams.d2g = 1;
 
     problemParams.gamma = 1.4;
     problemParams.membrane = 0;
@@ -51,6 +28,31 @@ int main()
     problemParams.alfa = 1;
     problemParams.beta = 2;
     problemParams.nu_coef = 0.1;
+
+    ParticleParams gasParams;
+    gasParams.particles_amount = 990;  // should be devidable by (L2R + 1)
+    gasParams.im_particles_amount = 450;  // should be devidable by (L2R + 1)
+    gasParams.isGas = true;
+
+    gasParams.rho_left = 100;
+    gasParams.press_left = 100;
+    gasParams.vel_left = 0;
+    gasParams.energy_left = 2.5;
+
+    gasParams.rho_right = 12.5;
+    gasParams.press_right = 10;
+    gasParams.vel_right = 0;
+    gasParams.energy_right = 2;
+
+    ParticleParams dustParams;
+    dustParams.particles_amount = 990;
+    dustParams.im_particles_amount = 450;
+    dustParams.isGas = false;
+
+    dustParams.rho_left = 100 * problemParams.d2g;
+    dustParams.vel_left = 0;
+    dustParams.rho_right = 12.5 * problemParams.d2g;
+    dustParams.vel_right = 0;
 
     // check correctness of params
     double l2r = gasParams.rho_left / gasParams.rho_right;
@@ -83,6 +85,7 @@ int main()
     //gas_shock(gasParams, problemParams);
     cells_shock(0.005, gasParams, dustParams, problemParams);
     //explicit_shock(gasParams, dustParams, problemParams);
+    //monaghan_shock(gasParams,dustParams, problemParams);
 
     clock_t finishTime = clock();
 

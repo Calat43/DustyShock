@@ -2,7 +2,7 @@
 
 const double pi = 3.14159265358;
 
-const char * DATA_DIR = "/home/calat/CLionProjects/DustyShock";
+const char * DATA_DIR = "/home/calat/CLionProjects/DustyShock/test";
 
 //const char * PROBLEM_PARAMS_FILE = "/home/calat/CLionProjects/DustyShock/...";
 
@@ -74,7 +74,7 @@ double found_next_rho(uint image_amount, double mass, double prev_x, std::vector
     double rho = 0;
     for(uint j = 0; j < image_amount; ++j)
     {
-        if (fabs(prev_x - prev_image_x.at(j)) < 2.1 * params.h)
+        if (fabs(prev_x - prev_image_x.at(j)) <= 2. * params.h)
         {
             rho += spline_kernel(prev_x, prev_image_x.at(j), params);
         }
@@ -100,7 +100,7 @@ double found_next_energy(double prev_energy, double mass, double prev_vel, doubl
 
     for(uint j = 0; j < image_amount; ++j)
     {
-        if (fabs(prev_x - prev_image_x.at(j)) < 2.1 * params.h)
+        if (fabs(prev_x - prev_image_x.at(j)) <= 2 * params.h)
         {
             pres_member += (prev_vel - prev_image_vel.at(j)) * spline_gradient(prev_x, prev_image_x.at(j), params);
             visc_member += (prev_vel - prev_image_vel.at(j)) * spline_gradient(prev_x, prev_image_x.at(j), params) *
@@ -180,7 +180,7 @@ double interpolation_value(double looked_coord, double mass, std::vector<double>
 
     for(uint i = 0; i < amount; ++i)
     {
-        if (fabs(looked_coord - coord.at(i)) < 2.1 * params.h)
+        if (fabs(looked_coord - coord.at(i)) <= 2. * params.h)
         {
             result += function.at(i) / rho.at(i) * spline_kernel(looked_coord, coord.at(i), params);
         }
@@ -194,7 +194,7 @@ double interpolation_rho(double looked_coord, double mass, std::vector<double> &
 
     for(uint i = 0; i < amount; ++i)
     {
-        if(fabs(looked_coord - coord.at(i)) < 2.1 * params.h)
+        if(fabs(looked_coord - coord.at(i)) <= 2. * params.h)
         {
             result += spline_kernel(looked_coord, coord.at(i), params);
         }
